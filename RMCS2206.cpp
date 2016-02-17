@@ -62,22 +62,44 @@ void RMCS2206::set_position(float deg)
 {
 	//
 	
+	
+	
 }
 
 void RMCS2206::set_speed(float degPerSec)
 {
 	//
 	
+	
+	
 }
 
-void RMCS2206::move(float deg)
+void RMCS2206::move_relative(float deg)
 {
 	//Move a relative encoder count using 'R' command
 	
-	serial.print("R"); serial.println(int(deg/_degPerEnc));
+	if(deg > 0)
+	{
+		serial.print("R"); serial.print("+"); serial.println(int(abs(deg)/_degPerEnc));
+	}
+	else if(deg < 0)
+	{
+		serial.print("R"); serial.print("+"); serial.println(int(abs(deg)/_degPerEnc));
+	}
+	else
+	{
+		serial.print("R"); serial.print(0);
+	}
 	
+	Serial.print("Should be moving to a relative position of: "); Serial.println(deg);
 }
-
+/* 
+int RMCS2206::read_encoder()
+{
+	
+	serial.
+	
+} */
 
 
 

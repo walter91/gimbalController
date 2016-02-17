@@ -12,7 +12,7 @@ RMCS2206 elevation ('E', 2);
 **********************************************************************************************/
 void setup()
 {
-	Serial.begin(19200);
+	Serial.begin(9600);
 	azimuth.begin();
 	elevation.begin();
 }
@@ -22,7 +22,15 @@ void setup()
 **********************************************************************************************/
 void loop()
 {
-
+	azimuth.move_relative(180.0);
+	delay(5000);
+	azimuth.move_relative(-180.0);
+	delay(5000);
+	
+	Serial.println("S5");
+	delay(5000);
+	
+	
 }
 
 

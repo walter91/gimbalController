@@ -17,7 +17,7 @@ class RMCS2206
 		int begin();
 		void set_position(float deg);
 		void set_speed(float degPerSec);
-		void move(float deg);
+		void move_relative(float deg);
 		
 		
 	private:
