@@ -148,7 +148,7 @@ void loop()
 		{
 			lastTime1 = millis();
 			deg1 = count1/13.17;
-			deg1_c = analogRead(potPin1);
+			deg1_c = 360.0*(analogRead(potPin1)/4095.0);
 			control1 = pid(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
 			digitalWrite(motorDirPin1, direction(control1));
 			analogWrite(motorPwmPin1, abs(control1));
@@ -161,7 +161,7 @@ void loop()
 		{
 			lastTime2 = millis();
 			deg2 = count2/13.17;
-			deg2_c = analogRead(potPin2);
+			deg2_c = 360.0*(analogRead(potPin2)/4095.0);
 			control1 = pid(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
 			digitalWrite(motorDirPin2, direction(control2));
 			analogWrite(motorPwmPin2, abs(control2));
