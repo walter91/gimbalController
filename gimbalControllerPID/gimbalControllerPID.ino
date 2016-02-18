@@ -4,23 +4,23 @@ This code implements PID control on position of two dc
  motors. State knowledge is based on quadrature encoder
  feedback.
  
- Hardware required for implimentation
+ Hardware required for implementation
 	Arduino Due
 	H-bridge motor driver with PWM and DIR pins (e.g. Pololu G2 High-Power Motor Driver 24v13)
-	DC motor with encoder with CPR>>360 (99:1 Metal Gearmotor 25Dx54L mm HP 12V with 48 CPR Encoder)
+	DC motor with encoder with CPR>>360 (99:1 Metal Gear motor 25Dx54L mm HP 12V with 48 CPR Encoder)
 		Note: The CPR of the recommended motor is effective 4741 after the gearbox.
 	Optional: Logic level shifter (most encoders use 5v, including the recommended. The DUE requires 3.3v logic)
 	
-Wireing
-	1)There should be four wires to each encoder (A,B, 5v, GND)
+Wiring
+	1)There should be four wires to each encoder (A, B, 5v, GND)
 		A and B connect to the selected pins (see enc1A - enc2B)
-		GND is commoned with the arduino GND pin
-		5v can come from any sourse (includeing arduino) as long as GND of the sourse is commoned with logic
+		GND is commoned with the Arduino GND pin
+		5v can come from any source (including Arduino) as long as GND of the source is commoned with logic
 	
 	2)POTs 1 and 2 should each have three connections
-		Connection 1 to 3.3v on arduino
+		Connection 1 to 3.3v on Arduino
 		Connection 2 to the pin indicated in code (see potPin1 and potPin2)
-		Connection 3 to GND of the arduino
+		Connection 3 to GND of the Arduino
 		
 	3)Follow the H-bridge wiring scheme from the manufacturer
 		see https://www.pololu.com/product/2992 for the H-bridge selected
@@ -29,25 +29,26 @@ Wireing
 Tuning
 	The kp values indicated in this code were calculated to saturate (give full throttle) to the 
 	motor when there is an error of 5 degrees. This is appropriate for generally continuous command
-	strings provided the rate of command change is within the motor opperating frequency. 
+	strings provided the rate of command change is within the motor operating frequency. 
 	
-	ki and kd values are initially zero'd.
+	ki and kd values are initially zeroed.
 	
 	If the rise-time (the time required for an initial error to become acceptably small, ignoring overshoot)
 	is acceptably small, then kp should remain its default value.
 	
-	If there is an unaccepable level of overshoot
-	or setteling time increase the kd value in increments of 5 until an the system settles quickly enough.
+	If there is an unacceptable level of overshoot
+	or settling time increase the kd value in increments of 5 until an the system settles quickly enough.
 	
-	Once kp and kd are choosen, add a disturbence force to the motor output. This can be a spring, or
+	Once kp and kd are chosen, add a disturbance force to the motor output. This can be a spring, or
 	any external circumstance which causes an error in the output. Then slowly increase ki until the error is
 	eliminated quickly enough. ki should be kept as small as possible as it can cause instabilities and degrade 
 	the dynamic response of the system.
 	
 
 Other Notes
-	The direction was arbitrarily choosen in the code. If the system appears unstable initially, change the
-	intiallization of "dir" within the direction function. This swaps which direction is positive and negative.
+	The direction was arbitrarily chosen in the code. If the system appears unstable initially, change the
+	initialization of "dir" within the direction function. This swaps which direction is positive and negative.
+
 	
 ************************/
 
@@ -68,8 +69,10 @@ long count1, count2;	//Global variables to track position of motors (encoders)
 *************************/
 void setup()
 {
-	//Global Setup
+	Serial.begin(19200);
 	
+	
+	//Global Setup
 	count1 = 0;	//Initialize encoder count
 	count2 = 0;	//Initialize encoder count
 	
@@ -170,6 +173,12 @@ void loop()
 				flag2 = !flag2;
 			}
 		}
+		
+		Serial.print("Motor 1 Command: "); Serial.print(deg1_c); Serial.print("\t");
+		Serial.print("Motor 2 Command: "); Serial.println(deg2_c);
+		Serial.print("Motor 1 Position: "); Serial.print(deg1); Serial.print("\t");
+		Serial.print("Motor 2 Position: "); Serial.println(deg2);
+		Serial.println("");
 	}	
 }
 
