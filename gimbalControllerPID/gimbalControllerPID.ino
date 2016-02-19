@@ -64,12 +64,19 @@ const int enc2B = 29;	//Pins for encoders
 
 long count1, count2;	//Global variables to track position of motors (encoders)
 
+float adcBits = 12.0;
+float pwmBits = 12.0;
+float encoder1CPR = 4741.44;
+float encoder2CPR = 4741.44;
+
+float ang[] = {0.0, 0.0};
+
 /************************
 	Setup...
 *************************/
 void setup()
 {
-	Serial.begin(19200);
+	Serial.begin(115200);
 	
 	
 	//Global Setup
@@ -91,8 +98,9 @@ void setup()
     attachInterrupt(digitalPinToInterrupt(enc2B), enc2B_changed, CHANGE);	//Setup interrupt for background proccessing
 	
 	//ADC and PWM precision
-	analogWriteResolution(12);
-	analogReadResolution(12);
+	analogWriteResolution(pwmBits);
+	analogReadResolution(adcBits);
+	
 	
 }
 
@@ -129,13 +137,17 @@ void loop()
 	bool flag1 = true;	//Is this the first time through?
 	bool flag2 = true;	//Is this the first time through?
 	
+	//Conditions for Kp calculation
+	const float maxErrorDeg1 = 5.0;
+	const float maxErrorDeg2 = 5.0;
+	
 	//Constant variables for PID algorithm
-	const int kp1 = 819.0;
+	const int kp1 = 1/maxErrorDeg1;	//Should be .2 when using 5-degrees
 	const int ki1 = 0.0;
 	const int kd1 = 0.0;
 	
 	//Constant variables for PID algorithm
-	const int kp2 = 819.0;
+	const int kp2 = 1/maxErrorDeg2;	//Should be .2 when using 5-degrees
 	const int ki2 = 0.0;
 	const int kd2 = 0.0;
 
@@ -150,11 +162,12 @@ void loop()
 		if(millis() - lastTime1 >= 10)
 		{
 			lastTime1 = millis();
-			deg1 = count1/13.17;
-			deg1_c = 360.0*(analogRead(potPin1)/4095.0);
+			deg1 = (count1*360.0)/encoder1CPR;
+			deg1_c = 360.0*(analogRead(potPin1)/(pow(2.0,adcBits)-1));
+			//deg1_c = ang[1];
 			control1 = pid(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
 			digitalWrite(motorDirPin1, direction(control1));
-			analogWrite(motorPwmPin1, abs(control1));
+			analogWrite(motorPwmPin1, (pow(2.0,pwmBits)-1)*abs(control1));
 			if(flag1)
 			{
 				flag1 = !flag1;
@@ -163,11 +176,12 @@ void loop()
 		if(millis() - lastTime2 >= 10)
 		{
 			lastTime2 = millis();
-			deg2 = count2/13.17;
-			deg2_c = 360.0*(analogRead(potPin2)/4095.0);
+			deg2 = (count2*360.0)/encoder2CPR;
+			deg2_c = 360.0*(analogRead(potPin2)/(pow(2.0,adcBits)-1));
+			//deg2_c = ang[2];
 			control1 = pid(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
 			digitalWrite(motorDirPin2, direction(control2));
-			analogWrite(motorPwmPin2, abs(control2));
+			analogWrite(motorPwmPin2, (pow(2.0,pwmBits)-1)*abs(control2));
 			if(flag2)
 			{
 				flag2 = !flag2;
@@ -230,24 +244,24 @@ float saturate(float control, float controlThresh)
 void enc1A_changed()
 {
     enc1AState = digitalRead(enc1A);
-    if(enc1AState)  //A is HIGH
+    if(enc1AState)  //A changed to HIGH
     {
         if(enc1BState)  //B is HIGH
         {
             count1--;
         }
-        else
+        else	//B is LOW
         {
             count1++;
         }
     }
-    else
+    else	//A changed to LOW
     {
-        if(enc1BState)
+        if(enc1BState)	//B is HIGH
         {
             count1++;
         }
-        else
+        else //B is LOW
         {
             count1--;
         }
@@ -258,7 +272,7 @@ void enc1B_changed()
 {
     enc1BState = digitalRead(enc1B);
 
-    if(enc1BState)  //B is HIGH
+    if(enc1BState)  //B changed to HIGH
     {
         if(enc1AState)  //A is HIGH
         {
@@ -269,7 +283,7 @@ void enc1B_changed()
             count1--;
         }
     }
-    else  //B is LOW
+    else  //B changed to LOW
     {
         if(enc1AState)  //A is HIGH
         {
@@ -282,28 +296,27 @@ void enc1B_changed()
     }
 }
 
-
 void enc2A_changed()
 {
     enc2AState = digitalRead(enc2A);
-    if(enc2AState)  //A is HIGH
+    if(enc2AState)  //A changed to HIGH
     {
         if(enc2BState)  //B is HIGH
         {
             count2--;
         }
-        else
+        else	//B is LOW
         {
             count2++;
         }
     }
-    else
+    else	//A changed to LOW
     {
-        if(enc2BState)
+        if(enc2BState)	//B is HIGH
         {
             count2++;
         }
-        else
+        else	//B is LOW
         {
             count2--;
         }
@@ -314,7 +327,7 @@ void enc2B_changed()
 {
     enc2BState = digitalRead(enc2B);
 
-    if(enc2BState)  //B is HIGH
+    if(enc2BState)  //B changed to HIGH
     {
         if(enc2AState)  //A is HIGH
         {
@@ -325,7 +338,7 @@ void enc2B_changed()
             count2--;
         }
     }
-    else  //B is LOW
+    else  //B changed to LOW
     {
         if(enc2AState)  //A is HIGH
         {
@@ -348,3 +361,16 @@ bool direction(float control)
 	}
 	return(dir);
 }
+
+void serialEvent()
+{
+	while(Serial.available() >= 8)
+	{
+		int index = Serial.read();
+		float angle_c = Serial.parseFloat();
+		
+		ang[index] = angle_c;
+	}
+}
+
+
