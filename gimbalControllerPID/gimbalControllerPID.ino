@@ -57,8 +57,8 @@ Other Notes
 Global Variables
 *************************/
 bool enc1AState, enc1BState, enc2AState, enc2BState;	//Encoder channel states
-const int enc1A = 25;	//Pins for encoders
-const int enc1B = 26;	//Pins for encoders
+const int enc1A = 24;	//Pins for encoders
+const int enc1B = 25;	//Pins for encoders
 const int enc2A = 28;	//Pins for encoders
 const int enc2B = 29;	//Pins for encoders
 
@@ -123,14 +123,15 @@ void loop()
 	
 	unsigned long lastTime1 = millis();	//Initialize sampeling timing
 	unsigned long lastTime2 = millis();	//Initialize sampeling timing
+	unsigned long lastPrintTime = millis();
 	
 	float deg1, deg2, deg1_c, deg2_c, control1, control2;	//Define all the float variables
 	
 	const int Ts = .01; //Sample period in seconds (equivilent to 10 milliseconds)
-	const float tau = .05;	//digital LPF coefficent
+	const float tau = .00005;	//digital LPF coefficent
 	
-	const float intThresh1 = .5;	//Threshold for using integrator (deg)
-	const float contThresh1 = 4095.0;	//Threshold for control variable saturation (dec of bits)
+	const float intThresh1 = .95;	//Threshold for using integrator (deg)
+	const float contThresh1 = 4090.0;	//Threshold for control variable saturation (dec of bits)
 	const float intThresh2 = .5;	//Threshold for using integrator (deg)
 	const float contThresh2 = 4095.0;	//Threshold for control variable saturation (dec of bits)
 	
@@ -142,14 +143,15 @@ void loop()
 	const float maxErrorDeg2 = 5.0;
 	
 	//Constant variables for PID algorithm
-	const int kp1 = 1/maxErrorDeg1;	//Should be .2 when using 5-degrees
-	const int ki1 = 0.0;
-	const int kd1 = 0.0;
+	const float kp1 = 1.0/maxErrorDeg1;	//Should be .2 when using 5-degrees
+	const float ki1 = 0.05;
+	//const float kd1 = -0.00002;
+	const float kd1 = 0.0;
 	
 	//Constant variables for PID algorithm
-	const int kp2 = 1/maxErrorDeg2;	//Should be .2 when using 5-degrees
-	const int ki2 = 0.0;
-	const int kd2 = 0.0;
+	const float kp2 = 1.0/maxErrorDeg2;	//Should be .2 when using 5-degrees
+	const float ki2 = 0.0;
+	const float kd2 = 0.0;
 
 	const int potPin1 = A1;	//Define pins for Potentiometers
 	const int potPin2 = A2;	//Define pins for Potentiometers
@@ -159,13 +161,20 @@ void loop()
 	
 	while(1)
 	{
+		if (Serial.available())	//Serial Data is in the buffer...
+		{
+			Serial.println("Read New Command");
+			serial_parser();
+			Serial.println("New Command");
+		}		
+		
 		if(millis() - lastTime1 >= 10)
 		{
 			lastTime1 = millis();
-			deg1 = (count1*360.0)/encoder1CPR;
-			deg1_c = 360.0*(analogRead(potPin1)/(pow(2.0,adcBits)-1));
-			//deg1_c = ang[1];
-			control1 = pid(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
+			deg1 = (float(count1)*360.0)/encoder1CPR;
+			//deg1_c = 360.0*(analogRead(potPin1)/(pow(2.0,adcBits)-1));
+			deg1_c = float(ang[1]);
+			control1 = pid1(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
 			digitalWrite(motorDirPin1, direction(control1));
 			analogWrite(motorPwmPin1, (pow(2.0,pwmBits)-1)*abs(control1));
 			if(flag1)
@@ -173,34 +182,90 @@ void loop()
 				flag1 = !flag1;
 			}
 		}
-		if(millis() - lastTime2 >= 10)
+		/* if(millis() - lastTime2 >= 10)
 		{
 			lastTime2 = millis();
 			deg2 = (count2*360.0)/encoder2CPR;
-			deg2_c = 360.0*(analogRead(potPin2)/(pow(2.0,adcBits)-1));
-			//deg2_c = ang[2];
-			control1 = pid(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
+			//deg2_c = 360.0*(analogRead(potPin2)/(pow(2.0,adcBits)-1));
+			deg2_c = ang[2];
+			control2 = pid2(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
 			digitalWrite(motorDirPin2, direction(control2));
 			analogWrite(motorPwmPin2, (pow(2.0,pwmBits)-1)*abs(control2));
 			if(flag2)
 			{
 				flag2 = !flag2;
 			}
+		} */
+		if(millis() - lastPrintTime >= 1000)
+		{
+			Serial.print("Motor 1 Command: "); Serial.print(deg1_c); Serial.print("\t");
+			Serial.print("Motor 2 Command: "); Serial.println(deg2_c);
+			Serial.print("Motor 1 Position: "); Serial.print(deg1); Serial.print("\t");
+			Serial.print("Motor 2 Position: "); Serial.println(deg2);
+			Serial.print("Motor 1 Control: "); Serial.print(control1); Serial.print("\t");
+			Serial.print("Motor 2 Coltron: "); Serial.println(control2);
+			Serial.println("");
+			lastPrintTime = millis();
 		}
-		
-		Serial.print("Motor 1 Command: "); Serial.print(deg1_c); Serial.print("\t");
-		Serial.print("Motor 2 Command: "); Serial.println(deg2_c);
-		Serial.print("Motor 1 Position: "); Serial.print(deg1); Serial.print("\t");
-		Serial.print("Motor 2 Position: "); Serial.println(deg2);
-		Serial.println("");
 	}	
 }
 
 /************************
 Additional Functions
 *************************/
-float pid(float state, float stateCommand, float Ts, float tau, float kp, float ki, float kd, float intThresh, float contThresh, bool flag)
+float pid1(float state, float stateCommand, float Ts, float tau, float kp, float ki, float kd, float intThresh, float contThresh, bool flag)
 {
+	Ts = .01;
+	
+	static float integrator, differentiator, error_d1;
+	
+	if(flag)
+	{
+		integrator = 0.0;
+		differentiator = 0.0;
+		error_d1 = 0.0;
+	}
+	
+	float error = stateCommand - state;
+	
+	if(abs(error) < intThresh && abs(error) > .25)
+	{
+		integrator = integrator + (Ts/2.0)*(error + error_d1);
+	}
+	else
+	{
+		integrator = 0.0;
+	}
+	
+	//Serial.println(integrator);
+	
+	//differentiator = ((2.0*tau - Ts)/(2.0*tau + Ts))*differentiator + (2.0/(2.0*tau + Ts))*(error - error_d1);
+	
+	differentiator = (error_d1 - error)/Ts;
+	
+	/* Serial.print(state);
+	Serial.print("\t");
+	Serial.print(stateCommand);
+	Serial.print("\t");
+	Serial.print(error);
+	Serial.print("\t");
+	Serial.print(error_d1);
+	Serial.print("\t");
+	Serial.println(differentiator); */
+	
+	
+	//differentiator = 0;
+	
+	error_d1 = error;
+	
+	return(saturate(kp*error + ki*integrator + kd*differentiator, contThresh));
+	
+}
+
+float pid2(float state, float stateCommand, float Ts, float tau, float kp, float ki, float kd, float intThresh, float contThresh, bool flag)
+{
+	Ts = .01;
+	
 	static float integrator, differentiator, error_d1;
 	
 	if(flag)
@@ -221,11 +286,31 @@ float pid(float state, float stateCommand, float Ts, float tau, float kp, float 
 		integrator = 0.0;
 	}
 	
-	differentiator = (2.0*tau - Ts)/(2.0*tau + Ts)*differentiator + 2.0/(2.0*tau + Ts)*(error - error_d1);
+	//Serial.println(integrator);
+	
+	//differentiator = ((2.0*tau - Ts)/(2.0*tau + Ts))*differentiator + (2.0/(2.0*tau + Ts))*(error - error_d1);
+	
+	differentiator = (error_d1 - error)/Ts;
+	
+	/* Serial.print(state);
+	Serial.print("\t");
+	Serial.print(stateCommand);
+	Serial.print("\t");
+	Serial.print(error);
+	Serial.print("\t");
+	Serial.print(error_d1);
+	Serial.print("\t");
+	Serial.println(differentiator); */
+	
+	
+	//differentiator = 0;
+	
+	error_d1 = error;
 	
 	return(saturate(kp*error + ki*integrator + kd*differentiator, contThresh));
 	
 }
+
 
 float saturate(float control, float controlThresh)
 {
@@ -353,24 +438,27 @@ void enc2B_changed()
 
 bool direction(float control)
 {
-	static bool dir = true;
+	bool dir;
 	
 	if(control >= 0)
 	{
-		dir = !dir;
+		dir = 1;
+	}
+	else
+	{
+		dir = 0;
 	}
 	return(dir);
 }
 
-void serialEvent()
+void serial_parser()
 {
-	while(Serial.available() >= 8)
-	{
-		int index = Serial.read();
-		float angle_c = Serial.parseFloat();
-		
-		ang[index] = angle_c;
-	}
+	int index = Serial.parseInt();
+	float angle_c = Serial.parseFloat();
+	
+	ang[index] = angle_c;
+
+	Serial.flush();
 }
 
 
