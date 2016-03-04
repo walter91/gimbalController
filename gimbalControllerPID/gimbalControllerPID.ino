@@ -1,5 +1,4 @@
 /************************
-
 This code implements PID control on position of two dc
  motors. State knowledge is based on quadrature encoder
  feedback.
@@ -44,11 +43,9 @@ Tuning
 	eliminated quickly enough. ki should be kept as small as possible as it can cause instabilities and degrade 
 	the dynamic response of the system.
 	
-
 Other Notes
 	The direction was arbitrarily chosen in the code. If the system appears unstable initially, change the
 	initialization of "dir" within the direction function. This swaps which direction is positive and negative.
-
 	
 ************************/
 
@@ -59,8 +56,8 @@ Global Variables
 bool enc1AState, enc1BState, enc2AState, enc2BState;	//Encoder channel states
 const int enc1A = 24;	//Pins for encoders
 const int enc1B = 25;	//Pins for encoders
-const int enc2A = 28;	//Pins for encoders
-const int enc2B = 29;	//Pins for encoders
+const int enc2A = 30;	//Pins for encoders
+const int enc2B = 31;	//Pins for encoders
 
 long count1, count2;	//Global variables to track position of motors (encoders)
 
@@ -110,13 +107,13 @@ void setup()
 void loop()
 {
 	const int motorPwmPin1 = 2;	//Define pins for motor PWM
-	const int motorPwmPin2 = 5;	//Define pins for motor PWM
+	const int motorPwmPin2 = 8;	//Define pins for motor PWM
 	
 	pinMode(motorPwmPin1, OUTPUT);	//Setup pins for motor PWM
 	pinMode(motorPwmPin2, OUTPUT);	//Setup pins for motor PWM
 	
 	const int motorDirPin1 = 3;	//Define pins for motor direction
-	const int motorDirPin2 = 6;	//Define pins for motor direction
+	const int motorDirPin2 = 9;	//Define pins for motor direction
 	
 	pinMode(motorDirPin1, OUTPUT);	//Setup pins for motor direction
 	pinMode(motorDirPin2, OUTPUT);	//Setup pins for motor direction
@@ -130,27 +127,27 @@ void loop()
 	const int Ts = .01; //Sample period in seconds (equivilent to 10 milliseconds)
 	const float tau = .00005;	//digital LPF coefficent
 	
-	const float intThresh1 = .95;	//Threshold for using integrator (deg)
-	const float contThresh1 = 4090.0;	//Threshold for control variable saturation (dec of bits)
-	const float intThresh2 = .5;	//Threshold for using integrator (deg)
-	const float contThresh2 = 4095.0;	//Threshold for control variable saturation (dec of bits)
+	const float intThresh1 = 3;	//Threshold for using integrator (deg)
+	const float contThresh1 = 1.0;	//Threshold for control variable saturation (dec of bits)
+	const float intThresh2 = 3;	//Threshold for using integrator (deg)
+	const float contThresh2 = 1.0;	//Threshold for control variable saturation (dec of bits)
 	
 	bool flag1 = true;	//Is this the first time through?
 	bool flag2 = true;	//Is this the first time through?
 	
 	//Conditions for Kp calculation
-	const float maxErrorDeg1 = 5.0;
-	const float maxErrorDeg2 = 5.0;
+	const float maxErrorDeg1 = 15.0;
+	const float maxErrorDeg2 = 15.0;
 	
 	//Constant variables for PID algorithm
 	const float kp1 = 1.0/maxErrorDeg1;	//Should be .2 when using 5-degrees
-	const float ki1 = 0.05;
+	const float ki1 = 0.1;
 	//const float kd1 = -0.00002;
 	const float kd1 = 0.0;
 	
 	//Constant variables for PID algorithm
 	const float kp2 = 1.0/maxErrorDeg2;	//Should be .2 when using 5-degrees
-	const float ki2 = 0.0;
+	const float ki2 = 0.1;
 	const float kd2 = 0.0;
 
 	const int potPin1 = A1;	//Define pins for Potentiometers
@@ -182,7 +179,7 @@ void loop()
 				flag1 = !flag1;
 			}
 		}
-		/* if(millis() - lastTime2 >= 10)
+		if(millis() - lastTime2 >= 10)
 		{
 			lastTime2 = millis();
 			deg2 = (count2*360.0)/encoder2CPR;
@@ -195,15 +192,15 @@ void loop()
 			{
 				flag2 = !flag2;
 			}
-		} */
+		}
 		if(millis() - lastPrintTime >= 1000)
 		{
 			Serial.print("Motor 1 Command: "); Serial.print(deg1_c); Serial.print("\t");
 			Serial.print("Motor 2 Command: "); Serial.println(deg2_c);
 			Serial.print("Motor 1 Position: "); Serial.print(deg1); Serial.print("\t");
 			Serial.print("Motor 2 Position: "); Serial.println(deg2);
-			Serial.print("Motor 1 Control: "); Serial.print(control1); Serial.print("\t");
-			Serial.print("Motor 2 Coltron: "); Serial.println(control2);
+			Serial.print("Motor 1 Control: "); Serial.print(control1*100.0); Serial.print("\t");
+			Serial.print("Motor 2 Control: "); Serial.println(control2*100.0);
 			Serial.println("");
 			lastPrintTime = millis();
 		}
@@ -237,24 +234,9 @@ float pid1(float state, float stateCommand, float Ts, float tau, float kp, float
 		integrator = 0.0;
 	}
 	
-	//Serial.println(integrator);
-	
 	//differentiator = ((2.0*tau - Ts)/(2.0*tau + Ts))*differentiator + (2.0/(2.0*tau + Ts))*(error - error_d1);
 	
 	differentiator = (error_d1 - error)/Ts;
-	
-	/* Serial.print(state);
-	Serial.print("\t");
-	Serial.print(stateCommand);
-	Serial.print("\t");
-	Serial.print(error);
-	Serial.print("\t");
-	Serial.print(error_d1);
-	Serial.print("\t");
-	Serial.println(differentiator); */
-	
-	
-	//differentiator = 0;
 	
 	error_d1 = error;
 	
@@ -277,7 +259,7 @@ float pid2(float state, float stateCommand, float Ts, float tau, float kp, float
 	
 	float error = stateCommand - state;
 	
-	if(error < intThresh)
+	if(abs(error) < intThresh && abs(error) > .25)
 	{
 		integrator = integrator + (Ts/2.0)*(error + error_d1);
 	}
@@ -286,24 +268,9 @@ float pid2(float state, float stateCommand, float Ts, float tau, float kp, float
 		integrator = 0.0;
 	}
 	
-	//Serial.println(integrator);
-	
 	//differentiator = ((2.0*tau - Ts)/(2.0*tau + Ts))*differentiator + (2.0/(2.0*tau + Ts))*(error - error_d1);
 	
 	differentiator = (error_d1 - error)/Ts;
-	
-	/* Serial.print(state);
-	Serial.print("\t");
-	Serial.print(stateCommand);
-	Serial.print("\t");
-	Serial.print(error);
-	Serial.print("\t");
-	Serial.print(error_d1);
-	Serial.print("\t");
-	Serial.println(differentiator); */
-	
-	
-	//differentiator = 0;
 	
 	error_d1 = error;
 	
@@ -384,7 +351,10 @@ void enc1B_changed()
 void enc2A_changed()
 {
     enc2AState = digitalRead(enc2A);
-    if(enc2AState)  //A changed to HIGH
+    
+	//Serial.println("enc2A");
+	
+	if(enc2AState)  //A changed to HIGH
     {
         if(enc2BState)  //B is HIGH
         {
@@ -411,6 +381,8 @@ void enc2A_changed()
 void enc2B_changed()
 {
     enc2BState = digitalRead(enc2B);
+	
+	//Serial.println("enc2B");
 
     if(enc2BState)  //B changed to HIGH
     {
@@ -442,11 +414,11 @@ bool direction(float control)
 	
 	if(control >= 0)
 	{
-		dir = 1;
+		dir = 0;
 	}
 	else
 	{
-		dir = 0;
+		dir = 1;
 	}
 	return(dir);
 }
@@ -460,5 +432,3 @@ void serial_parser()
 
 	Serial.flush();
 }
-
-
