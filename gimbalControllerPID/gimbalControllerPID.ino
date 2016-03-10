@@ -121,10 +121,11 @@ void loop()
 	unsigned long lastTime1 = millis();	//Initialize sampeling timing
 	unsigned long lastTime2 = millis();	//Initialize sampeling timing
 	unsigned long lastPrintTime = millis();
+	unsigned long loopTime1, loopTime2;
 	
-	float deg1, deg2, deg1_c, deg2_c, control1, control2;	//Define all the float variables
+	float deg1, deg2, deg1_c, deg2_c, deg1_d1, deg2_d1, control1, control2, vel1, vel2, vel1_d1, vel2_d1, acc1, acc2;	//Define all the float variables
 	
-	const int Ts = .01; //Sample period in seconds (equivilent to 10 milliseconds)
+	const int Ts = 10; //Sample period in milliseconds
 	const float tau = .00005;	//digital LPF coefficent
 	
 	const float intThresh1 = 3;	//Threshold for using integrator (deg)
@@ -165,11 +166,13 @@ void loop()
 			Serial.println("New Command");
 		}		
 		
-		if(millis() - lastTime1 >= 10)
+		loopTime1 = millis() - lastTime1;
+		if( loopTime1 >= Ts)
 		{
 			lastTime1 = millis();
 			deg1 = (float(count1)*360.0)/encoder1CPR;
-			//deg1_c = 360.0*(analogRead(potPin1)/(pow(2.0,adcBits)-1));
+			vel1 = (deg1 - deg1_d1)/((float(loopTime1)/1000.0));
+			acc1 = (vel1 - vel1_d1)/((float(loopTime1)/1000.0));
 			deg1_c = float(ang[1]);
 			control1 = pid1(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
 			digitalWrite(motorDirPin1, direction1(control1));
@@ -178,12 +181,17 @@ void loop()
 			{
 				flag1 = !flag1;
 			}
+			deg1_d1 = deg1; 
+			vel1_d1 = vel1;
 		}
-		if(millis() - lastTime2 >= 10)
+		
+		loopTime2 = millis() - lastTime2;
+		if( loopTime2 >= Ts)
 		{
 			lastTime2 = millis();
 			deg2 = (count2*360.0)/encoder2CPR;
-			//deg2_c = 360.0*(analogRead(potPin2)/(pow(2.0,adcBits)-1));
+			vel2 = (deg2 - deg2_d1)/((float(loopTime2)/1000.0));
+			acc2 = (vel2 - vel2_d1)/((float(loopTime2)/1000.0));
 			deg2_c = ang[2];
 			control2 = pid2(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
 			digitalWrite(motorDirPin2, direction2(control2));
@@ -192,8 +200,10 @@ void loop()
 			{
 				flag2 = !flag2;
 			}
+			deg2_d1 = deg2; 
+			vel2_d1 = vel2;
 		}
-		if(millis() - lastPrintTime >= 1000)
+		if((millis() - lastPrintTime >= 1000))
 		{
 			Serial.print("Motor 1 Command: "); Serial.print(deg1_c); Serial.print("\t");
 			Serial.print("Motor 2 Command: "); Serial.println(deg2_c);
@@ -203,6 +213,19 @@ void loop()
 			Serial.print("Motor 2 Control: "); Serial.println(control2*100.0);
 			Serial.println("");
 			lastPrintTime = millis();
+			
+			/* Serial.print("Motor 1 Pos: "); Serial.print(deg1); Serial.print("\t");
+			Serial.print("Motor 2 Pos: "); Serial.println(deg2);
+			Serial.print("Motor 1 Vel: "); Serial.print(vel1); Serial.print("\t");
+			Serial.print("Motor 2 Vel: "); Serial.println(vel2);
+			Serial.print("Motor 1 Acc: "); Serial.print(acc1); Serial.print("\t");
+			Serial.print("Motor 2 Acc: "); Serial.println(acc2);
+			Serial.println(""); */
+			
+			/* Serial.print(deg1);Serial.print("\t");
+			Serial.print(vel1);Serial.print("\t");
+			Serial.println(acc1);
+			lastPrintTime = millis();			*/
 		}
 	}	
 }
