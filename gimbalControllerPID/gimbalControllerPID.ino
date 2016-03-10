@@ -56,8 +56,8 @@ Global Variables
 bool enc1AState, enc1BState, enc2AState, enc2BState;	//Encoder channel states
 const int enc1A = 24;	//Pins for encoders
 const int enc1B = 25;	//Pins for encoders
-const int enc2A = 30;	//Pins for encoders
-const int enc2B = 31;	//Pins for encoders
+const int enc2A = 32;	//Pins for encoders
+const int enc2B = 33;	//Pins for encoders
 
 long count1, count2;	//Global variables to track position of motors (encoders)
 
@@ -172,7 +172,7 @@ void loop()
 			//deg1_c = 360.0*(analogRead(potPin1)/(pow(2.0,adcBits)-1));
 			deg1_c = float(ang[1]);
 			control1 = pid1(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
-			digitalWrite(motorDirPin1, direction(control1));
+			digitalWrite(motorDirPin1, direction1(control1));
 			analogWrite(motorPwmPin1, (pow(2.0,pwmBits)-1)*abs(control1));
 			if(flag1)
 			{
@@ -186,7 +186,7 @@ void loop()
 			//deg2_c = 360.0*(analogRead(potPin2)/(pow(2.0,adcBits)-1));
 			deg2_c = ang[2];
 			control2 = pid2(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
-			digitalWrite(motorDirPin2, direction(control2));
+			digitalWrite(motorDirPin2, direction2(control2));
 			analogWrite(motorPwmPin2, (pow(2.0,pwmBits)-1)*abs(control2));
 			if(flag2)
 			{
@@ -296,6 +296,9 @@ float saturate(float control, float controlThresh)
 void enc1A_changed()
 {
     enc1AState = digitalRead(enc1A);
+	//Serial.print("\t");
+	//Serial.println("enc1A");
+	
     if(enc1AState)  //A changed to HIGH
     {
         if(enc1BState)  //B is HIGH
@@ -323,7 +326,8 @@ void enc1A_changed()
 void enc1B_changed()
 {
     enc1BState = digitalRead(enc1B);
-
+	//Serial.print("\t");
+	//Serial.println("enc1B");
     if(enc1BState)  //B changed to HIGH
     {
         if(enc1AState)  //A is HIGH
@@ -382,17 +386,18 @@ void enc2B_changed()
 {
     enc2BState = digitalRead(enc2B);
 	
-	//Serial.println("enc2B");
-
     if(enc2BState)  //B changed to HIGH
     {
         if(enc2AState)  //A is HIGH
         {
             count2++;
+			//Serial.println("enc2B, B high, A high, count2++");
         }
         else  //A is LOW
         {
             count2--;
+			
+			//Serial.println("enc2B, B High, A Low, count2--");
         }
     }
     else  //B changed to LOW
@@ -400,15 +405,32 @@ void enc2B_changed()
         if(enc2AState)  //A is HIGH
         {
             count2--;
+			//Serial.println("enc2B, B Low, A High, count2--");
         }
         else  //A is LOW
         {
             count2++;
+			//Serial.println("enc2B, B Low, A Low, count2++");
         }
     }
 }
 
-bool direction(float control)
+bool direction1(float control)
+{
+	bool dir;
+	
+	if(control >= 0)
+	{
+		dir = 0;
+	}
+	else
+	{
+		dir = 1;
+	}
+	return(dir);
+}
+
+bool direction2(float control)
 {
 	bool dir;
 	
