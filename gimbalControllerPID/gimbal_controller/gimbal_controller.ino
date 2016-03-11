@@ -1,53 +1,24 @@
-/************************
-This code implements PID control on position of two dc
- motors. State knowledge is based on quadrature encoder
- feedback.
- 
- Hardware required for implementation
-	Arduino Due
-	H-bridge motor driver with PWM and DIR pins (e.g. Pololu G2 High-Power Motor Driver 24v13)
-	DC motor with encoder with CPR>>360 (99:1 Metal Gear motor 25Dx54L mm HP 12V with 48 CPR Encoder)
-		Note: The CPR of the recommended motor is effective 4741 after the gearbox.
-	Optional: Logic level shifter (most encoders use 5v, including the recommended. The DUE requires 3.3v logic)
-	
-Wiring
-	1)There should be four wires to each encoder (A, B, 5v, GND)
-		A and B connect to the selected pins (see enc1A - enc2B)
-		GND is commoned with the Arduino GND pin
-		5v can come from any source (including Arduino) as long as GND of the source is commoned with logic
-	
-	2)POTs 1 and 2 should each have three connections
-		Connection 1 to 3.3v on Arduino
-		Connection 2 to the pin indicated in code (see potPin1 and potPin2)
-		Connection 3 to GND of the Arduino
-		
-	3)Follow the H-bridge wiring scheme from the manufacturer
-		see https://www.pololu.com/product/2992 for the H-bridge selected
-		and https://www.pololu.com/product/3219 for the motor selected
-	
-Tuning
-	The kp values indicated in this code were calculated to saturate (give full throttle) to the 
-	motor when there is an error of 5 degrees. This is appropriate for generally continuous command
-	strings provided the rate of command change is within the motor operating frequency. 
-	
-	ki and kd values are initially zeroed.
-	
-	If the rise-time (the time required for an initial error to become acceptably small, ignoring overshoot)
-	is acceptably small, then kp should remain its default value.
-	
-	If there is an unacceptable level of overshoot
-	or settling time increase the kd value in increments of 5 until an the system settles quickly enough.
-	
-	Once kp and kd are chosen, add a disturbance force to the motor output. This can be a spring, or
-	any external circumstance which causes an error in the output. Then slowly increase ki until the error is
-	eliminated quickly enough. ki should be kept as small as possible as it can cause instabilities and degrade 
-	the dynamic response of the system.
-	
-Other Notes
-	The direction was arbitrarily chosen in the code. If the system appears unstable initially, change the
-	initialization of "dir" within the direction function. This swaps which direction is positive and negative.
-	
-************************/
+/*
+The sensor outputs provided by the library are the raw 16-bit values
+obtained by concatenating the 8-bit high and low gyro data registers.
+They can be converted to units of dps (degrees per second) using the
+conversion factors specified in the datasheet for your particular
+device and full scale setting (gain).
+Example: An L3GD20H gives a gyro X axis reading of 345 with its
+default full scale setting of +/- 245 dps. The So specification
+in the L3GD20H datasheet (page 10) states a conversion factor of 8.75
+mdps/LSB (least significant bit) at this FS setting, so the raw
+reading of 345 corresponds to 345 * 8.75 = 3020 mdps = 3.02 dps.
+*/
+
+#include <Wire.h>
+#include "L3G.h"
+#include "Control.h"
+
+Control motor1;
+Control motor2;
+
+L3G gyro;
 
 
 /************************
@@ -68,15 +39,19 @@ float encoder2CPR = 4741.44;
 
 float ang[] = {0.0, 0.0};
 
-/************************
-	Setup...
-*************************/
-void setup()
-{
-	Serial.begin(115200);
-	
-	
-	//Global Setup
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+
+  /* if (!gyro.init())
+  {
+    Serial.println("Failed to autodetect gyro type!");
+    while (1);
+  }
+
+  gyro.enableDefault(); */
+  
+  //Global Setup
 	count1 = 0;	//Initialize encoder count
 	count2 = 0;	//Initialize encoder count
 	
@@ -93,30 +68,22 @@ void setup()
 	enc2BState = digitalRead(enc2B);	//Initialize encoder state
 	attachInterrupt(digitalPinToInterrupt(enc2A), enc2A_changed, CHANGE);	//Setup interrupt for background proccessing
     attachInterrupt(digitalPinToInterrupt(enc2B), enc2B_changed, CHANGE);	//Setup interrupt for background proccessing
+
+	motor1.set_precision(pwmBits, adcBits);
+	motor2.set_precision(pwmBits, adcBits);
 	
-	//ADC and PWM precision
-	analogWriteResolution(pwmBits);
-	analogReadResolution(adcBits);
 	
-	
+  
 }
 
-/************************
-	Loop...
-*************************/
 void loop()
 {
+
 	const int motorPwmPin1 = 2;	//Define pins for motor PWM
 	const int motorPwmPin2 = 8;	//Define pins for motor PWM
 	
-	pinMode(motorPwmPin1, OUTPUT);	//Setup pins for motor PWM
-	pinMode(motorPwmPin2, OUTPUT);	//Setup pins for motor PWM
-	
 	const int motorDirPin1 = 3;	//Define pins for motor direction
 	const int motorDirPin2 = 9;	//Define pins for motor direction
-	
-	pinMode(motorDirPin1, OUTPUT);	//Setup pins for motor direction
-	pinMode(motorDirPin2, OUTPUT);	//Setup pins for motor direction
 	
 	unsigned long lastTime1 = millis();	//Initialize sampeling timing
 	unsigned long lastTime2 = millis();	//Initialize sampeling timing
@@ -126,7 +93,7 @@ void loop()
 	float deg1, deg2, deg1_c, deg2_c, deg1_d1, deg2_d1, control1, control2, vel1, vel2, vel1_d1, vel2_d1, acc1, acc2;	//Define all the float variables
 	
 	const int Ts = 10; //Sample period in milliseconds
-	const float tau = .00005;	//digital LPF coefficent
+	const float tau = .05;	//digital LPF coefficent
 	
 	const float intThresh1 = 3;	//Threshold for using integrator (deg)
 	const float contThresh1 = 1.0;	//Threshold for control variable saturation (dec of bits)
@@ -137,25 +104,28 @@ void loop()
 	bool flag2 = true;	//Is this the first time through?
 	
 	//Conditions for Kp calculation
-	const float maxErrorDeg1 = 35.0;
-	const float maxErrorDeg2 = 35.0;
+	const float maxErrorDeg1 = 15.0;
+	const float maxErrorDeg2 = 15.0;
 	
 	//Constant variables for PID algorithm
-	const float kp1 = 1.0/maxErrorDeg1;	//Should be .2 when using 5-degrees
+	const float kp1 = 1.0/maxErrorDeg1;
 	const float ki1 = 0.0;
-	//const float kd1 = -0.00002;
-	const float kd1 = 0.0;
+	const float kd1 = 0.01;
 	
 	//Constant variables for PID algorithm
-	const float kp2 = 1.0/maxErrorDeg2;	//Should be .2 when using 5-degrees
+	const float kp2 = 1.0/maxErrorDeg2;
 	const float ki2 = 0.0;
-	const float kd2 = 0.0;
-
-	const int potPin1 = A1;	//Define pins for Potentiometers
-	const int potPin2 = A2;	//Define pins for Potentiometers
+	const float kd2 = 0.01;
 	
-	pinMode(potPin1, INPUT);	//Setup pins for Potentiometers
-	pinMode(potPin2, INPUT);	//Setup pins for Potentiometers
+	motor1.set_gains(kp1, ki1, kd1);
+	motor1.set_pins(motorPwmPin1, motorDirPin1);
+	motor1.set_antiwindup(intThresh1, .025);
+	motor1.set_time_filter(Ts/1000, .05, .05);
+	
+	motor2.set_gains(kp2, ki2, kd2);
+	motor2.set_pins(motorPwmPin2, motorDirPin2);
+	motor2.set_antiwindup(intThresh2, .025);
+	motor2.set_time_filter(Ts/1000, .05, .05);
 	
 	while(1)
 	{
@@ -174,7 +144,7 @@ void loop()
 			vel1 = (deg1 - deg1_d1)/((float(loopTime1)/1000.0));
 			acc1 = (vel1 - vel1_d1)/((float(loopTime1)/1000.0));
 			deg1_c = float(ang[1]);
-			control1 = pid1(deg1, deg1_c, Ts, tau, kp1, ki1, kd1, intThresh1, contThresh1, flag1);
+			control1 = motor1.pid(deg1, deg1_c, flag1);
 			digitalWrite(motorDirPin1, direction1(control1));
 			analogWrite(motorPwmPin1, (pow(2.0,pwmBits)-1)*abs(control1));
 			if(flag1)
@@ -193,7 +163,7 @@ void loop()
 			vel2 = (deg2 - deg2_d1)/((float(loopTime2)/1000.0));
 			acc2 = (vel2 - vel2_d1)/((float(loopTime2)/1000.0));
 			deg2_c = ang[2];
-			control2 = pid2(deg2, deg2_c, Ts, tau, kp2, ki2, kd2, intThresh2, contThresh2, flag2);
+			control2 = motor2.pid(deg2, deg2_c, flag2);
 			digitalWrite(motorDirPin2, direction2(control2));
 			analogWrite(motorPwmPin2, (pow(2.0,pwmBits)-1)*abs(control2));
 			if(flag2)
@@ -228,91 +198,7 @@ void loop()
 			lastPrintTime = millis();			*/
 		}
 	}	
-}
 
-/************************
-Additional Functions
-*************************/
-float pid1(float state, float stateCommand, float Ts, float tau, float kp, float ki, float kd, float intThresh, float contThresh, bool flag)
-{
-	
-	static float integrator, differentiator, error_d1;
-	
-	if(flag)
-	{
-		integrator = 0.0;
-		differentiator = 0.0;
-		error_d1 = 0.0;
-	}
-	
-	float error = stateCommand - state;
-	
-	if(abs(error) < intThresh && abs(error) > .25)
-	{
-		integrator = integrator + (Ts/2.0)*(error + error_d1);
-	}
-	else
-	{
-		integrator = 0.0;
-	}
-	
-	//differentiator = ((2.0*tau - Ts)/(2.0*tau + Ts))*differentiator + (2.0/(2.0*tau + Ts))*(error - error_d1);
-	
-	differentiator = (error_d1 - error)/Ts;
-	
-	error_d1 = error;
-	
-	return(saturate(kp*error + ki*integrator + kd*differentiator, contThresh));
-	
-}
-
-float pid2(float state, float stateCommand, float Ts, float tau, float kp, float ki, float kd, float intThresh, float contThresh, bool flag)
-{
-	Ts = .01;
-	
-	static float integrator, differentiator, error_d1;
-	
-	if(flag)
-	{
-		integrator = 0.0;
-		differentiator = 0.0;
-		error_d1 = 0.0;
-	}
-	
-	float error = stateCommand - state;
-	
-	if(abs(error) < intThresh && abs(error) > .25)
-	{
-		integrator = integrator + (Ts/2.0)*(error + error_d1);
-	}
-	else
-	{
-		integrator = 0.0;
-	}
-	
-	//differentiator = ((2.0*tau - Ts)/(2.0*tau + Ts))*differentiator + (2.0/(2.0*tau + Ts))*(error - error_d1);
-	
-	differentiator = (error_d1 - error)/Ts;
-	
-	error_d1 = error;
-	
-	return(saturate(kp*error + ki*integrator + kd*differentiator, contThresh));
-	
-}
-
-
-float saturate(float control, float controlThresh)
-{
-	if(control > controlThresh)
-	{
-		control = controlThresh;
-	}
-	else if(control < -controlThresh)
-	{
-		control = -controlThresh;
-	}
-	
-	return(control);
 }
 
 void enc1A_changed()
