@@ -92,7 +92,7 @@ void loop()
 	
 	float deg1, deg2, deg1_c, deg2_c, deg1_d1, deg2_d1, control1, control2, vel1, vel2, vel1_d1, vel2_d1, acc1, acc2;	//Define all the float variables
 	
-	const int Ts = 10; //Sample period in milliseconds
+	const int Ts = 2; //Sample period in milliseconds
 	const float tau = .05;	//digital LPF coefficent
 	
 	const float intThresh1 = 3;	//Threshold for using integrator (deg)
@@ -117,18 +117,19 @@ void loop()
 	const float ki2 = 0.0;
 	const float kd2 = 0.01;
 	
-	motor1.set_gains(kp1, ki1, kd1);
+	motor1.set_gains(kp1, ki1, kd1, 'p');
 	motor1.set_pins(motorPwmPin1, motorDirPin1);
-	motor1.set_antiwindup(intThresh1, .025);
-	motor1.set_time_filter(Ts/1000, .05, .05);
+	motor1.set_antiwindup(intThresh1, .025, 'p');
+	motor1.set_time_filter(Ts/1000, .05, .05, 'p');
 	
-	motor2.set_gains(kp2, ki2, kd2);
+	motor2.set_gains(kp2, ki2, kd2, 'p');
 	motor2.set_pins(motorPwmPin2, motorDirPin2);
-	motor2.set_antiwindup(intThresh2, .025);
-	motor2.set_time_filter(Ts/1000, .05, .05);
+	motor2.set_antiwindup(intThresh2, .025, 'p');
+	motor2.set_time_filter(Ts/1000, .05, .05, 'p');
 	
 	while(1)
 	{
+		
 		if (Serial.available())	//Serial Data is in the buffer...
 		{
 			Serial.println("Read New Command");
@@ -144,7 +145,7 @@ void loop()
 			vel1 = (deg1 - deg1_d1)/((float(loopTime1)/1000.0));
 			acc1 = (vel1 - vel1_d1)/((float(loopTime1)/1000.0));
 			deg1_c = float(ang[1]);
-			control1 = motor1.pid(deg1, deg1_c, flag1);
+			control1 = motor1.position(deg1, deg1_c, flag1);
 			digitalWrite(motorDirPin1, direction1(control1));
 			analogWrite(motorPwmPin1, (pow(2.0,pwmBits)-1)*abs(control1));
 			if(flag1)
@@ -163,7 +164,7 @@ void loop()
 			vel2 = (deg2 - deg2_d1)/((float(loopTime2)/1000.0));
 			acc2 = (vel2 - vel2_d1)/((float(loopTime2)/1000.0));
 			deg2_c = ang[2];
-			control2 = motor2.pid(deg2, deg2_c, flag2);
+			control2 = motor2.position(deg2, deg2_c, flag2);
 			digitalWrite(motorDirPin2, direction2(control2));
 			analogWrite(motorPwmPin2, (pow(2.0,pwmBits)-1)*abs(control2));
 			if(flag2)
@@ -191,6 +192,15 @@ void loop()
 			Serial.print("Motor 1 Acc: "); Serial.print(acc1); Serial.print("\t");
 			Serial.print("Motor 2 Acc: "); Serial.println(acc2);
 			Serial.println(""); */
+			
+			/* Serial.print("Motor 1 Control: "); Serial.println(control1); //Serial.print("\t");
+			//Serial.print("Motor 2 Pos: "); Serial.println(deg2);
+			Serial.print("Motor 1 Vel: "); Serial.println(vel1); //Serial.print("\t");
+			//Serial.print("Motor 2 Vel: "); Serial.println(vel2);
+			Serial.print("Motor 1 Command: "); Serial.println(deg1_c); //Serial.print("\t");
+			//Serial.print("Motor 2 Acc: "); Serial.println(acc2);
+			Serial.println("");
+			lastPrintTime = millis(); */
 			
 			/* Serial.print(deg1);Serial.print("\t");
 			Serial.print(vel1);Serial.print("\t");

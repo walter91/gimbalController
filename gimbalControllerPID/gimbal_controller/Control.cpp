@@ -16,19 +16,44 @@ void Control::begin()
 	
 }
 
-void Control::set_time_filter(float Ts, float alpha, float tau)
+void Control::set_time_filter(float Ts, float alpha, float tau, char type)
 {
-	_Ts = Ts;
-	_alpha = alpha;
-	_tau = tau;
+	if(type == 'p')
+	{
+		_Ts_pos = Ts;
+		_alpha_pos = alpha;
+		_tau_pos = tau;
+	}
+	else if(type == 'v')
+	{
+		_Ts_vel = Ts;
+		_alpha_vel = alpha;
+		_tau_vel = tau;
+	}
+	else
+	{
+		while(1);
+	}
 }
 
-void Control::set_gains(float kp, float ki, float kd)
+void Control::set_gains(float kp, float ki, float kd, char type)
 {
-	_kp = kp;
-	_ki = ki;
-	_kd = kd;	
-	
+	if(type == 'p')
+	{
+		_kp_pos = kp;
+		_ki_pos = ki;
+		_kd_pos = kd;	
+	}
+	else if(type == 'v')
+	{
+		_kp_vel = kp;
+		_ki_vel = ki;
+		_kd_vel = kd;
+	}
+	else
+	{
+		while(1);
+	}
 }
 
 void Control::set_precision(int pwmBits, int adcBits)
@@ -42,46 +67,95 @@ void Control::set_precision(int pwmBits, int adcBits)
 	
 }
 
-void Control::set_antiwindup(float intThreshHigh, float intThreshLow)
+void Control::set_antiwindup(float intThreshHigh, float intThreshLow, char type)
 {
-	_intThreshHigh = intThreshHigh;
-	_intThreshLow = intThreshLow;
+	if(type == 'p')
+	{
+		_intThreshHigh_pos = intThreshHigh;
+		_intThreshLow_pos = intThreshLow;
+	}
+	else if(type == 'v')
+	{
+		_intThreshHigh_vel = intThreshHigh;
+		_intThreshLow_vel = intThreshLow;
+	}
+	else
+	{
+		while(1);
+	}
 }
 
-float Control::pid(float state, float command, bool flag)
+float Control::position(float state, float command, bool flag)
 {
 	
 	if(flag)
 	{
-		_integrator = 0.0;
-		_differentiator = 0.0;
-		_error_d1 = 0.0;
+		_integrator_pos = 0.0;
+		_differentiator_pos = 0.0;
+		_error_d1_pos = 0.0;
 	}
 	
 	float error = command - state;
 	//Serial.println(error);
 	
-	if(abs(error) < _intThreshHigh && abs(error) > _intThreshLow)
+	if(abs(error) < _intThreshHigh_pos && abs(error) > _intThreshLow_pos)
 	{
-		_integrator = _integrator + (_Ts/2.0)*(error + _error_d1);
+		_integrator_pos = _integrator_pos + (_Ts_pos/2.0)*(error + _error_d1_pos);
 	}
 	else
 	{
-		_integrator = 0.0;
+		_integrator_pos = 0.0;
 	}
 	
-	_differentiator = ((2.0*_tau - _Ts)/(2.0*_tau + _Ts))*_differentiator + (2.0/(2.0*_tau + _Ts))*(error - _error_d1);
+	_differentiator_pos = ((2.0*_tau_pos - _Ts_pos)/(2.0*_tau_pos + _Ts_pos))*_differentiator_pos + (2.0/(2.0*_tau_pos + _Ts_pos))*(error - _error_d1_pos);
 	
-	_error_d1 = error;
+	_error_d1_pos = error;
 	
 	//Serial.print(_kp);Serial.print("\t");Serial.print(_ki);Serial.print("\t");Serial.println(_kd);
 	
 	//Serial.println(saturate(_kp*error + _ki*_integrator + _kd*_differentiator, _contThresh, 0.0));
 	
 	//return(_kp*error + _ki*_integrator + _kd*_differentiator);
-	return(saturate((_kp*error + _ki*_integrator + _kd*_differentiator), 1.0, -1.0));
+	return(saturate((_kp_pos*error + _ki_pos*_integrator_pos + _kd_pos*_differentiator_pos), 1.0, -1.0));
 
 }
+
+
+float Control::velocity(float state, float command, bool flag)
+{
+	
+	if(flag)
+	{
+		_integrator_vel = 0.0;
+		_differentiator_vel = 0.0;
+		_error_d1_vel = 0.0;
+	}
+	
+	float error = command - state;
+	//Serial.println(error);
+	
+	if(abs(error) < _intThreshHigh_vel && abs(error) > _intThreshLow_vel)
+	{
+		_integrator_vel = _integrator_vel + (_Ts_vel/2.0)*(error + _error_d1_vel);
+	}
+	else
+	{
+		_integrator_vel = 0.0;
+	}
+	
+	_differentiator_vel = ((2.0*_tau_vel - _Ts_vel)/(2.0*_tau_vel + _Ts_vel))*_differentiator_vel + (2.0/(2.0*_tau_vel + _Ts_vel))*(error - _error_d1_vel);
+	
+	_error_d1_vel = error;
+	
+	//Serial.print(_kp);Serial.print("\t");Serial.print(_ki);Serial.print("\t");Serial.println(_kd);
+	
+	//Serial.println(saturate(_kp*error + _ki*_integrator + _kd*_differentiator, _contThresh, 0.0));
+	
+	//return(_kp*error + _ki*_integrator + _kd*_differentiator);
+	return(saturate((_kp_vel*error + _ki_vel*_integrator_vel + _kd_vel*_differentiator_vel), 1.0, -1.0));
+
+}
+
 
 void Control::set_pins(int pwmPin, int dirPin)
 {
@@ -116,3 +190,32 @@ float Control::saturate(float input, float highLimit, float lowLimit)
 	//Serial.println(output);
 	return(output);
 }
+
+
+float Control::x_rate_filter(float signal, float alpha)
+{
+	static float oldSignal, newSignal;
+	
+	newSignal = oldSignal*(1-alpha)+signal*alpha;
+	oldSignal = newSignal;
+	return(newSignal);
+}
+float Control::y_rate_filter(float signal, float alpha)
+{
+	static float oldSignal, newSignal;
+	
+	newSignal = oldSignal*(1-alpha)+signal*alpha;
+	oldSignal = newSignal;
+	return(newSignal);
+}
+float Control::z_rate_filter(float signal, float alpha)
+{
+	static float oldSignal, newSignal;
+	
+	newSignal = oldSignal*(1-alpha)+signal*alpha;
+	oldSignal = newSignal;
+	return(newSignal);
+}
+
+
+
